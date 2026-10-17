@@ -21,13 +21,13 @@ import MetaUtils (todo, todoImpl)
 --    для пустого хвоста, [3], [2, 3], [1, 2, 3] именно в этом порядке.
 
 predictedLayer :: ListF Integer Int
-predictedLayer = todo "1.1 слой"
+predictedLayer = Cons 7 3
 
 predictedUnfold :: [ListF Integer Integer]
-predictedUnfold = todo "1.1 развёртка"
+predictedUnfold = [Cons 3 2, Cons 2 1, Cons 1 0, Nil]
 
 predictedFold :: [Integer]
-predictedFold = todo "1.1 свёртка"
+predictedFold = [0, 3, -1, 2]
 
 
 -- 1.2. Направления стрелки
@@ -41,9 +41,10 @@ newtype Arrow1 b = Arrow1 { appArrow1 :: Int -> b }
 newtype Arrow2 a = Arrow2 { appArrow2 :: a -> Int }
 
 instance Functor Arrow1 where
-  fmap f (Arrow1 g) = Arrow1 (\x -> todo "1.2 результат")
+  fmap f (Arrow1 g) = Arrow1 (\x -> f $ g x)
 
-todoImpl ''Contravariant ''Arrow2
+instance Contravariant Arrow2 where
+  contramap f (Arrow2 g) = Arrow2 (g . f)
 
 
 -- 1.3. Слой становится результатом
@@ -53,10 +54,12 @@ todoImpl ''Contravariant ''Arrow2
 -- Сумма пустого списка — 0. cata должен работать с любым Functor, не только ListF.
 
 cata :: Functor f => Algebra f a -> Fix f -> a
-cata phi (In layer) = phi (fmap (todo "1.3 рекурсивный вызов") layer)
+cata phi (In layer) = phi (fmap (cata phi) layer)
 
 sumList :: Num a => List a -> a
-sumList = todo "1.3 сумма"
+sumList = cata \case
+  Nil -> 0
+  Cons n r -> n + r
 
 
 -- 1.4. Зерно становится слоем
@@ -67,10 +70,10 @@ sumList = todo "1.3 сумма"
 -- Определения ana и iota напишите самостоятельно.
 
 ana :: Functor f => Coalgebra f s -> s -> Fix f
-ana = todo "1.4 ana"
+ana phi s = In $ fmap (ana phi) (phi s)
 
 iota :: Integer -> List Integer
-iota = todo "1.4 iota"
+iota n = ana (\x -> if x > 0 then Cons (n + 1 - x) (x - 1) else Nil) n
 
 
 -- 1.5. Выражение — неподвижная точка
@@ -85,22 +88,28 @@ iota = todo "1.4 iota"
 -- каждая операция — в скобках, без пробелов: ((3+5)*7), (3+-5).
 -- Вложенность и порядок операндов должны сохраняться, упрощать выражения не нужно.
 
-data ExprF r = ReplaceMeWithSomething
+data ExprF r = Const Int | Add r r | Mult r r
   deriving (Eq, Show, Ord, Functor)
 
 type Expr = Fix ExprF
 
 constCtor :: Int -> ExprF r
-constCtor = todo "1.5 Const"
+constCtor = Const
 
 addCtor :: r -> r -> ExprF r
-addCtor = todo "1.5 Add"
+addCtor = Add
 
 multCtor :: r -> r -> ExprF r
-multCtor = todo "1.5 Mult"
+multCtor = Mult
 
 evalExpr :: Expr -> Int
-evalExpr = todo "1.5 вычисление"
+evalExpr = cata \case
+ Const n -> n
+ Add l r -> l + r
+ Mult l r -> l * r
 
 showExpr :: Expr -> String
-showExpr = todo "1.5 печать"
+showExpr = cata \case
+  Const n -> show n
+  Add l r -> "(" ++ l ++ "+" ++ r ++ ")"
+  Mult l r -> "(" ++ l ++ "*" ++ r ++ ")"
