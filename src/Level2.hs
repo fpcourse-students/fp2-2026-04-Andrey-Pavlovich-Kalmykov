@@ -16,7 +16,8 @@ import MetaUtils (todo, todoImpl)
 
 newtype Cont r a = Cont { runCont :: (a -> r) -> r }
 
-todoImpl ''Functor ''Cont
+instance Functor (Cont r) where
+    fmap a2b (Cont f) = Cont \ b2r -> f $ b2r . a2b
 
 
 -- 2.2. Композиция направлений
@@ -28,8 +29,10 @@ todoImpl ''Functor ''Cont
 
 newtype Compose f g a = Compose { getCompose :: f (g a) }
 
-todoImpl ''Functor ''Compose
-todoImpl ''Contravariant ''Compose
+instance (Functor f, Functor g) => Functor (Compose f g) where
+    fmap a2b (Compose c) = Compose $ fmap (fmap a2b) c
+instance (Contravariant f, Functor g) => Contravariant (Compose f g) where
+    contramap a2b (Compose c) = Compose $ contramap (fmap a2b) c
 
 
 -- 2.3. Одинаковый map, разные схемы
@@ -40,10 +43,14 @@ todoImpl ''Contravariant ''Compose
 -- может менять тип элемента. cata и ana берутся из уровня 1.
 
 cataMap :: (a -> b) -> List a -> List b
-cataMap = todo "2.3 cataMap"
+cataMap f = cata \case
+    Nil -> In Nil
+    Cons a r -> In $ Cons (f a) r
 
 anaMap :: (a -> b) -> List a -> List b
-anaMap = todo "2.3 anaMap"
+anaMap f = ana \case
+    In Nil -> Nil
+    In (Cons a r) -> Cons (f a) r
 
 
 -- 2.4. Сортировка через дерево
@@ -58,10 +65,14 @@ hylo :: Functor f => Coalgebra f s -> Algebra f a -> s -> a
 hylo psi phi = cata phi . ana psi
 
 phiTreeInorder :: Algebra (TreeF a) [a]
-phiTreeInorder = todo "2.4 обход"
+phiTreeInorder = \case
+    Leaf -> []
+    Branch l v r -> l ++ [v] ++ r
 
 psiTreeBST :: Ord a => Coalgebra (TreeF a) [a]
-psiTreeBST = todo "2.4 разбиение"
+psiTreeBST = \case
+    [] -> Leaf
+    x : xs -> uncurry (flip Branch x) $ partition (<x) xs
 
 hyloSort :: Ord a => [a] -> [a]
 hyloSort = hylo psiTreeBST phiTreeInorder
@@ -75,13 +86,14 @@ hyloSort = hylo psiTreeBST phiTreeInorder
 -- аргументов в обычные списки. Элементы левого списка идут перед правым.
 
 toChurch :: [a] -> ChurchList a
-toChurch = todo "2.5 toChurch"
+toChurch (x : xs) = ChurchList \ f r -> x `f` (runChurchList (toChurch xs) f r)
+toChurch [] = ChurchList $ flip const
 
 fromChurch :: ChurchList a -> [a]
-fromChurch = todo "2.5 fromChurch"
+fromChurch (ChurchList f) = f (:) []
 
 appendChurch :: ChurchList a -> ChurchList a -> ChurchList a
-appendChurch = todo "2.5 appendChurch"
+appendChurch (ChurchList f) (ChurchList g) = ChurchList \h r -> f h $ g h r
 
 
 -- 2.6. Два скрытых состояния
@@ -93,7 +105,9 @@ appendChurch = todo "2.5 appendChurch"
 -- Box, stepBox, boxFromList, boxToList и примеры источников выданы.
 
 zipBox :: Box (ListF a) -> Box (ListF b) -> Box (ListF (a, b))
-zipBox = todo "2.6 zipBox"
+zipBox l r = Box (stepBox l, stepBox r) \case 
+    (Cons x rest, Cons y rest') -> Cons (x, y) (stepBox rest, stepBox rest')
+    _ -> Nil
 
 
 -- 2.7. Пропуск не означает конец
@@ -105,7 +119,12 @@ zipBox = todo "2.6 zipBox"
 -- искать следующий подходящий элемент рекурсией внутри шага не нужно.
 
 skipCounterexample :: [Integer]
-skipCounterexample = todo "2.7 контрпример"
+skipCounterexample = [1, 2]
 
 filterS :: (a -> Bool) -> Stream a -> Stream a
-filterS = todo "2.7 filterS"
+filterS p (Stream next s) = Stream next' s
+  where
+    next' st = case next st of
+      Done -> Done
+      Skip st' -> Skip st'
+      Yield x st' -> if p x then Yield x st' else Skip st'
